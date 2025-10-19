@@ -1,0 +1,51 @@
+{
+	"name": "fast-bloom-filter",
+	"version": "1.0.0",
+	"description": "Fastest Bloom Filter on NPM. Powered by WASM, written in TypeScript & C.",
+	"type": "module",
+	"license": "ISC",
+	"author": "Nicolas Duran <nicolas@duran.lol>",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/NicolasDuran/fast-bloom-filter.git"
+	},
+	"bugs": {
+		"url": "https://github.com/NicolasDuran/fast-bloom-filter/issues"
+	},
+	"engines": {
+		"node": ">=20"
+	},
+	"main": "./dist/index.cjs",
+	"module": "./dist/index.mjs",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.mjs",
+			"require": "./dist/index.cjs"
+		},
+		"./wasm/*": "./dist/wasm/*"
+	},
+	"sideEffects": false,
+	"files": [
+		"dist/**"
+	],
+	"scripts": {
+		"clean": "rm -rf dist",
+		"build:wasm": "emcc -O3 --no-entry -msimd128 -flto -s \"EXPORTED_FUNCTIONS=['_malloc','_free']\" -o ./src/wasm/bloomfilter.wasm ./src/wasm/xxhash.c ./src/wasm/bloomfilter.c",
+		"build:wasm:copy": "mkdir -p dist/wasm && cp ./src/wasm/bloomfilter.wasm ./dist/wasm/bloomfilter.wasm",
+		"build:ts": "tsup",
+		"build": "npm run build:wasm && npm run build:ts && npm run build:wasm:copy",
+		"test": "tsx --test",
+		"lint": "biome check --write",
+		"prepublishOnly": "npm run clean && npm run build"
+	},
+	"packageManager": "pnpm@10.18.3",
+	"devDependencies": {
+		"@biomejs/biome": "^2.2.6",
+		"@types/node": "^24.8.1",
+		"tsup": "^8.5.0",
+		"tsx": "^4.20.6",
+		"typescript": "^5.9.3"
+	}
+}

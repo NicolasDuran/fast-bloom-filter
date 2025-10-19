@@ -1,0 +1,6 @@
+dist/
+node_modules/
+src/wasm/*.wasm
+tests/_local/
+benchmark/node_modules/
+*.tgz

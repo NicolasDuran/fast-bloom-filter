@@ -1,0 +1,21 @@
+{
+	"name": "fast-bloom-filter-bench",
+	"private": true,
+	"author": "Nicolas Duran <nicolas@duran.lol>",
+	"license": "ISC",
+	"type": "module",
+	"scripts": {
+		"bench": "bun --expose-gc bench.ts"
+	},
+	"dependencies": {
+		"@ably/bloomit": "^1.4.2",
+		"bloom-filter": "^0.2.0",
+		"bloom-filters": "^3.0.4",
+		"bloomfilter": "^0.0.21",
+		"blumea": "^1.1.2"
+	},
+	"devDependencies": {
+		"@types/bloom-filter": "^0.2.4",
+		"@types/bloomfilter": "^0.0.2"
+	}
+}
