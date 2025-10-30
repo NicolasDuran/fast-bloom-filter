@@ -3,7 +3,7 @@ import npm_bloom_filter from "bloom-filter";
 import npm_bloom_filters from "bloom-filters";
 import npm_bloomfilter from "bloomfilter";
 import * as npm_blumea from "blumea";
-import { FastBloomFilter } from "../src/bloomfilter.ts";
+import FastBloomFilter from "../src/bloomfilter.js";
 
 export type AdapterInstance = {
 	addString?: (s: string) => void;
@@ -57,7 +57,7 @@ const adapterFastBloomFilter: Adapter = {
 	name: "FastFilterBloom",
 	supportsBuffer: true,
 	async create({ bits, k }) {
-		const inst = await FastBloomFilter(bits, k);
+		const inst = await FastBloomFilter.create(bits, k);
 		return {
 			addString: (s: string) => inst.addString(s),
 			hasString: (s: string) => inst.hasString(s),

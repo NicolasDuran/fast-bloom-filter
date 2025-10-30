@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import test, { describe } from "node:test";
-import { FastBloomFilter } from "../src/bloomfilter.js";
+import FastBloomFilter from "../src/bloomfilter.js";
 
 /**
  * Estimate cumulative false positives during insertion of `n` elements
@@ -57,7 +57,7 @@ describe("Accuracy - 10^6 elements", () => {
 	test("12MB, 4 hashes", { timeout: 120_000 }, async () => {
 		const totalBitCount = 12 * 8 * 1024 * 1024;
 		const hashCount = 4;
-		const filter = await FastBloomFilter(totalBitCount, hashCount);
+		const filter = await FastBloomFilter.create(totalBitCount, hashCount);
 
 		let duplicates = 0;
 		for (const element of randomStringWith1Duplicate) {
@@ -65,7 +65,7 @@ describe("Accuracy - 10^6 elements", () => {
 			if (exist) duplicates++;
 			else filter.addString(element);
 		}
-
+		filter.dispose();
 		// With a big filter we expect ~0–2 accidental hits here
 		assert.ok(
 			duplicates >= 0 && duplicates <= 2,
@@ -76,7 +76,7 @@ describe("Accuracy - 10^6 elements", () => {
 	test("1MB, 4 hashes", { timeout: 120_000 }, async () => {
 		const totalBitCount = 1 * 8 * 1024 * 1024;
 		const hashCount = 4;
-		const filter = await FastBloomFilter(totalBitCount, hashCount);
+		const filter = await FastBloomFilter.create(totalBitCount, hashCount);
 
 		let duplicates = 0;
 		for (const element of randomStringWith1Duplicate) {
@@ -84,7 +84,7 @@ describe("Accuracy - 10^6 elements", () => {
 			if (exist) duplicates++;
 			else filter.addString(element);
 		}
-
+		filter.dispose();
 		const expectedFalsePositives = cumulativeInsertionFalsePositives(
 			randomStringWith1Duplicate.length,
 			totalBitCount,
@@ -102,7 +102,7 @@ describe("Accuracy - 10^6 elements", () => {
 	test("512KB, 4 hashes", { timeout: 120_000 }, async () => {
 		const totalBitCount = 512 * 8 * 1024;
 		const hashCount = 4;
-		const filter = await FastBloomFilter(totalBitCount, hashCount);
+		const filter = await FastBloomFilter.create(totalBitCount, hashCount);
 
 		let duplicates = 0;
 		for (const element of randomStringWith1Duplicate) {
@@ -110,7 +110,7 @@ describe("Accuracy - 10^6 elements", () => {
 			if (exist) duplicates++;
 			else filter.addString(element);
 		}
-
+		filter.dispose();
 		const expectedFalsePositives = cumulativeInsertionFalsePositives(
 			randomStringWith1Duplicate.length,
 			totalBitCount,
@@ -128,7 +128,7 @@ describe("Accuracy - 10^6 elements", () => {
 	test("256KB, 4 hashes, 10^6 elements", { timeout: 120_000 }, async () => {
 		const totalBitCount = 256 * 8 * 1024;
 		const hashCount = 4;
-		const filter = await FastBloomFilter(totalBitCount, hashCount);
+		const filter = await FastBloomFilter.create(totalBitCount, hashCount);
 
 		let duplicates = 0;
 		for (const element of randomStringWith1Duplicate) {
@@ -142,7 +142,7 @@ describe("Accuracy - 10^6 elements", () => {
 			totalBitCount,
 			hashCount,
 		);
-
+		filter.dispose();
 		assertWithinRelativeBound(
 			duplicates,
 			expectedFalsePositives,

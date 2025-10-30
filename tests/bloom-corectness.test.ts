@@ -1,15 +1,18 @@
 import assert from "node:assert/strict";
-import { before, describe, test } from "node:test";
-import { type BloomFilter, FastBloomFilter } from "../src/bloomfilter.js";
+import { after, before, describe, test } from "node:test";
+import FastBloomFilter from "../src/bloomfilter.js";
 
-let filter: BloomFilter;
+let filter: FastBloomFilter;
 
 describe("Correctness", () => {
 	// Initialize once before tests in this block
 	before(async () => {
 		const totalBitCount = 10000;
 		const hashCount = 4;
-		filter = await FastBloomFilter(totalBitCount, hashCount);
+		filter = await FastBloomFilter.create(totalBitCount, hashCount);
+	});
+	after(async () => {
+		filter.dispose();
 	});
 
 	test("should add and find an element", () => {

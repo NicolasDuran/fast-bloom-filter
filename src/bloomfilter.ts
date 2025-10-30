@@ -1,22 +1,22 @@
 import * as fs from "node:fs";
 import { fileURLToPath } from "node:url";
 
-type FastBloomFilter = {
-	addString(text: string): void; // Insert a UTF-8 string into the filter
-	hasString(text: string): boolean; // Check a UTF-8 string
-	add(buffer: Uint8Array): void; // Insert a raw byte buffer
-	has(buffer: Uint8Array): boolean; // Check a raw byte buffer
-	bitCount: number; // Total number of bits in the bit array
-	hashCount: number; // Number of hash functions (k)
-	dispose(): void; // Free all WASM-allocated memory
-};
+// type FastBloomFilter = {
+// 	addString(text: string): void; // Insert a UTF-8 string into the filter
+// 	hasString(text: string): boolean; // Check a UTF-8 string
+// 	add(buffer: Uint8Array): void; // Insert a raw byte buffer
+// 	has(buffer: Uint8Array): boolean; // Check a raw byte buffer
+// 	bitCount: number; // Total number of bits in the bit array
+// 	hashCount: number; // Number of hash functions (k)
+// 	dispose(): void; // Free all WASM-allocated memory
+// };
 
 /**
- * Create a Bloom filter backed by a WebAssembly implementation.
+ * WebAssembly-backed Bloom filter.
  *
- * This function loads and instantiates `bloomfilter.wasm`, allocates the
- * underlying bitset inside the WASM linear memory, and returns a lightweight
- * runtime wrapper exposing convenient methods.
+ * Use `FastBloomFilter.create(bitCount, hashCount)` to asynchronously load the
+ * WASM module, allocate the underlying bitset, and receive a runtime wrapper
+ * with convenience methods (`addString`, `has`, etc.).
  *
  * Memory layout:
  * - A persistent bitset is allocated once via `malloc`, sized according to
@@ -36,133 +36,160 @@ type FastBloomFilter = {
  * Performance notes:
  * - Reuses a single scratch buffer to avoid allocating / freeing every call.
  *
- * @param bitCount   Desired number of bits in the filter. This value will be
- *                   rounded up to the nearest multiple of 32.
- *                   Example: passing 1,000,001 will internally become 1,000,032.
- *
- * @param hashCount  Number of hash rounds (k). More rounds reduce false
- *                   positives but increase CPU cost. Typical values are 4–12.
- *
- * @returns A `BloomFilter` object with:
- *   - `addString(str)`  → inserts a UTF-8 string
- *   - `hasString(str)`  → checks membership of a string
- *   - `add(buffer)`     → inserts binary data (Uint8Array)
- *   - `has(buffer)`     → checks membership of binary data
- *   - `bitCount` / `hashCount`
- *   - `dispose()`       → frees all WASM-allocated memory
- *
- * @example
+ * Example usage:
  * ```ts
- * const filter = await FastFilterBloom(1_000_000, 7);
+ * const filter = await FastBloomFilter.create(1_000_000, 7);
  * filter.addString("hello");
  * console.log(filter.hasString("hello")); // true
  * console.log(filter.hasString("world")); // maybe false
  * filter.dispose();
  * ```
  */
-export default async function FastBloomFilter(
-	bitCount: number, // Requested number of bits in the filter (may get rounded)
-	hashCount: number, // Number of hash functions (k)
-): Promise<FastBloomFilter> {
-	const wasmUrl = new URL("./wasm/bloomfilter.wasm", import.meta.url);
-	const wasmPath = fileURLToPath(wasmUrl);
+export default class FastBloomFilter {
+  private readonly bitCount: number;
+  private readonly hashCount: number;
+  private readonly bitsetPtr: number;
+  private readonly ex: WasmExports;
 
-	const encoder = new TextEncoder();
-	// Align bitCount to next multiple of 32 bits (round up to word boundary)
-	// SUGGESTION: You may want to log a warning if bitCount was not already aligned.
-	const m = Math.ceil(bitCount >> 5) << 5;
+  private readonly encoder: TextEncoder;
 
-	// Ensure k is an integer
-	const k = hashCount | 0;
+  private bufferPtr: number;
+  private bufferSize: number;
+  private u8View: Uint8Array;
 
-	// Load and instantiate the WASM binary
-	type WasmExports = {
-		memory: WebAssembly.Memory;
-		malloc: (size: number) => number;
-		free: (ptr: number) => void;
-		bloom_add: (
-			dataPtr: number,
-			len: number,
-			k: number,
-			bitCount: number,
-			bitset32Ptr: number,
-		) => void;
-		bloom_has: (
-			dataPtr: number,
-			len: number,
-			k: number,
-			bitCount: number,
-			bitset32Ptr: number,
-		) => number;
-	};
-	const wasmBuffer = fs.readFileSync(wasmPath);
-	const { instance } = await WebAssembly.instantiate(wasmBuffer);
-	const ex = instance.exports as unknown as WasmExports;
+  private constructor(bitCount: number, hashCount: number, ex: WasmExports) {
+    // round up to the next multiple of 32
+    this.bitCount = (bitCount + 31) & ~31;
+	const bytesCount = this.bitCount >>> 3;
+    this.bitsetPtr = ex.malloc(bytesCount);
 
-	const _wasm_bloom_add = ex.bloom_add;
-	const _wasm_bloom_has = ex.bloom_has;
+    this.hashCount = hashCount | 0;
+    this.encoder = new TextEncoder();
+    this.bufferPtr = 0;
+    this.bufferSize = 0;
+    this.u8View = new Uint8Array(ex.memory.buffer, 0, 0);
 
-	// Temporary input buffer (used for adding/checking strings/buffers)
-	let bufferPtr = 0;
-	let bufferSize = 0;
+    this.ex = ex;
+  }
 
-	// TypedArray view on the temp buffer — will be reassigned as buffer grows
-	let u8View = new Uint8Array(ex.memory.buffer, 0, 0);
+  /**
+   * Load the WASM module and return a ready-to-use Bloom filter.
+   *
+   * @param bitCount Desired number of bits. Rounded up to the nearest multiple of 32.
+   * @param hashCount Number of hash rounds (k). More rounds reduce false positives.
+   */
+  static async create(bitCount: number, hashCount: number): Promise<FastBloomFilter> {
+    const ex = await this.instantiateWasm();
+    return new FastBloomFilter(bitCount, hashCount, ex);
+  }
 
-	// Allocate bitset for the filter itself (persistent for lifetime of filter)
-	const bitWords = (m + 31) >>> 5; // How many 32-bit words are needed
-	const bitBytes = bitWords << 2; // Convert word count to bytes
-	const bitsetPtr = ex.malloc(bitBytes);
+  private static async instantiateWasm(): Promise<WasmExports> {
+    const wasmUrl = new URL("./wasm/bloomfilter.wasm", import.meta.url);
+    const wasmPath = fileURLToPath(wasmUrl);
+    const wasmBuffer = fs.readFileSync(wasmPath);
+    const { instance } = await WebAssembly.instantiate(wasmBuffer);
+    return instance.exports as unknown as WasmExports;
+  }
 
-	// Ensure the temp input buffer is large enough; if not, free and reallocate
-	function ensureCapacity(utf8Len: number) {
-		if (utf8Len <= bufferSize) return;
-		let newSize = bufferSize ? bufferSize : 256;
-		while (newSize < utf8Len) newSize <<= 1;
-		if (bufferPtr) ex.free(bufferPtr);
-		bufferPtr = ex.malloc(newSize);
-		bufferSize = newSize;
-		u8View = new Uint8Array(ex.memory.buffer, bufferPtr, bufferSize);
-	}
+  // Ensure the temp input buffer is large enough; if not, free and reallocate
+  ensureCapacity(utf8Len: number) {
+    if (utf8Len <= this.bufferSize) return;
+    let newSize = this.bufferSize ? this.bufferSize : 256;
+    while (newSize < utf8Len) newSize <<= 1;
+    if (this.bufferPtr) this.ex.free(this.bufferPtr);
+    this.bufferPtr = this.ex.malloc(newSize);
+    this.bufferSize = newSize;
+    this.u8View = new Uint8Array(
+      this.ex.memory.buffer,
+      this.bufferPtr,
+      this.bufferSize
+    );
+  }
 
-	// ---- String-based API ----
+  // ---- String-based API ----
 
-	function addString(text: string) {
-		ensureCapacity(text.length << 2); // Overprovision worst-case UTF-8 expansion
-		const { written } = encoder.encodeInto(text, u8View);
-		_wasm_bloom_add(bufferPtr, written, k, m, bitsetPtr);
-	}
+  addString(text: string) {
+    this.ensureCapacity(text.length << 2); // Overprovision worst-case UTF-8 expansion
+    const { written } = this.encoder.encodeInto(text, this.u8View);
+    this.ex.bloom_add(
+      this.bufferPtr,
+      written,
+      this.hashCount,
+      this.bitCount,
+      this.bitsetPtr
+    );
+  }
 
-	function hasString(text: string): boolean {
-		ensureCapacity(text.length << 2);
-		const { written } = encoder.encodeInto(text, u8View);
-		return _wasm_bloom_has(bufferPtr, written, k, m, bitsetPtr) === 1;
-	}
+  hasString(text: string): boolean {
+    this.ensureCapacity(text.length << 2);
+    const { written } = this.encoder.encodeInto(text, this.u8View);
+    return (
+      this.ex.bloom_has(
+        this.bufferPtr,
+        written,
+        this.hashCount,
+        this.bitCount,
+        this.bitsetPtr
+      ) === 1
+    );
+  }
 
-	// ---- Raw buffer API ----
+  // ---- Raw buffer API ----
 
-	function add(buffer: Uint8Array) {
-		ensureCapacity(buffer.length);
-		u8View.set(buffer);
-		_wasm_bloom_add(bufferPtr, buffer.length, k, m, bitsetPtr);
-	}
+  add(buffer: Uint8Array) {
+    this.ensureCapacity(buffer.length);
+    this.u8View.set(buffer);
+    this.ex.bloom_add(
+      this.bufferPtr,
+      buffer.length,
+      this.hashCount,
+      this.bitCount,
+      this.bitsetPtr
+    );
+  }
 
-	function has(buffer: Uint8Array): boolean {
-		ensureCapacity(buffer.length);
-		u8View.set(buffer);
-		return _wasm_bloom_has(bufferPtr, buffer.length, k, m, bitsetPtr) === 1;
-	}
+  has(buffer: Uint8Array): boolean {
+    this.ensureCapacity(buffer.length);
+    this.u8View.set(buffer);
+    return (
+      this.ex.bloom_has(
+        this.bufferPtr,
+        buffer.length,
+        this.hashCount,
+        this.bitCount,
+        this.bitsetPtr
+      ) === 1
+    );
+  }
 
-	// ---- Cleanup ----
+  // ---- Cleanup ----
 
-	function dispose() {
-		if (bufferPtr) {
-			ex.free(bufferPtr);
-			bufferPtr = 0;
-			bufferSize = 0;
-		}
-		if (bitsetPtr) ex.free(bitsetPtr);
-	}
-
-	return { addString, hasString, add, has, bitCount: m, hashCount: k, dispose };
+  dispose() {
+    if (this.bufferPtr) {
+      this.ex.free(this.bufferPtr);
+      this.bufferPtr = 0;
+      this.bufferSize = 0;
+    }
+    if (this.bitsetPtr) this.ex.free(this.bitsetPtr);
+  }
 }
+
+type WasmExports = {
+  memory: WebAssembly.Memory;
+  malloc: (size: number) => number;
+  free: (ptr: number) => void;
+  bloom_add: (
+    dataPtr: number,
+    len: number,
+    k: number,
+    bitCount: number,
+    bitset32Ptr: number
+  ) => void;
+  bloom_has: (
+    dataPtr: number,
+    len: number,
+    k: number,
+    bitCount: number,
+    bitset32Ptr: number
+  ) => number;
+};
