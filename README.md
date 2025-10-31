@@ -8,6 +8,10 @@
 
 ---
 
+## 💡 What is a Bloom Filter?
+A Bloom filter is a memory-efficient probabilistic set that guarantees no false negatives but tolerates the occasional false positive. It stores everything in an `m`-bit array, so larger `m` directly lowers the error rate. With `n` items and `k` hash functions the false-positive probability is `P_fp ≈ (1 - e^{-kn/m})^k`; using the near-optimal `k ≈ (m/n) ln 2` yields `m ≈ -(n ln p)/(ln 2)^2` bits to hit a target rate `p` (≈9.6 bits per element for `p = 0.01`).
+
+
 
 ## 🚀 Install
 
@@ -23,7 +27,7 @@ bun add fast-bloom-filter
 ```TypeScript
 import FastBloomFilter from "fast-bloom-filter";
 
-const bloomFilter = await FastBloomFilter(100, 4);
+const bloomFilter = await FastBloomFilter.create(100, 4);
 
 bloomFilter.addString("hello");
 bloomFilter.add(Buffer.from([0x01, 0x02, 0x03]));
@@ -32,7 +36,16 @@ bloomFilter.hasString("hello"); // true
 bloomFilter.has(Buffer.from([0x01, 0x02, 0x03])); // true
 bloomFilter.hasString("foo"); // likely false
 bloomFilter.has(Buffer.from([0x01, 0x02, 0x03, 0x04])); // likely false
+
+const snapshot = bloomFilter.export();
 bloomFilter.dispose();
+
+const restored = await FastBloomFilter.import(snapshot);
+restored.hasString("hello"); // true
+restored.has(Buffer.from([0x01, 0x02, 0x03])); // true
+restored.hasString("foo"); // likely false
+restored.has(Buffer.from([0x01, 0x02, 0x03, 0x04])); // likely false
+restored.dispose();
 ```
 
 ## 📐 Theory
@@ -50,15 +63,14 @@ bloomFilter.dispose();
 
 *Timings are medians of 3 runs with GC before/after each run. For adapters without Buffer support, buffer datasets are base64-encoded strings.*
   
- ### strings N=1e5, M=2^21 (~2MB), K=10
+### strings N=3e6, M=2^26 (~64MB), K=12
   
-  - **N:** 100,000  •  **Bits:** 2,097,152  •  **K:** 10  •  **Data:** strings
+  - **N:** 3,000,000  •  **Bits:** 67,108,864  •  **K:** 12  •  **Data:** strings
   
   | Adapter | Add Throughput | Has-hit Throughput | Has-miss Throughput | FP Rate | RSS (MB) |
   |:--|--:|--:|--:|--:|--:|
-  | FastFilterBloom | **21.19 Mops** <br><sub>100.0% of best</sub> | **23.28 Mops** <br><sub>100.0% of best</sub> | **20.18 Mops** <br><sub>100.0% of best</sub> | 0.00500% <br><sub>80.0% of best</sub> | **163.9** <br><sub>100.0% of best</sub> |
-| bloomfilter | 10.54 Mops <br><sub>49.7% of best</sub> | 10.25 Mops <br><sub>44.0% of best</sub> | 10.17 Mops <br><sub>50.4% of best</sub> | 0.00600% <br><sub>66.7% of best</sub> | 171.7 <br><sub>95.4% of best</sub> |
-| @ably/bloomit | 1.329 Mops <br><sub>6.3% of best</sub> | 1.347 Mops <br><sub>5.8% of best</sub> | 1.866 Mops <br><sub>9.2% of best</sub> | 0.00700% <br><sub>57.1% of best</sub> | 383.7 <br><sub>42.7% of best</sub> |
-| blumea | 550.0 Kops <br><sub>2.6% of best</sub> | 491.1 Kops <br><sub>2.1% of best</sub> | 1.608 Mops <br><sub>8.0% of best</sub> | 0.964% <br><sub>0.4% of best</sub> | 515.8 <br><sub>31.8% of best</sub> |
-| bloom-filters | 323.8 Kops <br><sub>1.5% of best</sub> | 322.3 Kops <br><sub>1.4% of best</sub> | 340.7 Kops <br><sub>1.7% of best</sub> | **0.00400%** <br><sub>100.0% of best</sub> | 372.4 <br><sub>44.0% of best</sub> |
-| bloom-filter | 218.6 Kops <br><sub>1.0% of best</sub> | 217.1 Kops <br><sub>0.9% of best</sub> | 1.285 Mops <br><sub>6.4% of best</sub> | 0.00600% <br><sub>66.7% of best</sub> | 375.0 <br><sub>43.7% of best</sub> |
+  | FastFilterBloom | **20.52 Mops** <br><sub>100.0% of best</sub> | **22.03 Mops** <br><sub>100.0% of best</sub> | **20.13 Mops** <br><sub>100.0% of best</sub> | **0.00230%** <br><sub>100.0% of best</sub> | 4328.0 <br><sub>77.5% of best</sub> |
+| bloomfilter | 9.224 Mops <br><sub>44.9% of best</sub> | 8.841 Mops <br><sub>40.1% of best</sub> | 9.106 Mops <br><sub>45.2% of best</sub> | 0.00257% <br><sub>89.6% of best</sub> | 4092.2 <br><sub>81.9% of best</sub> |
+| @ably/bloomit | 1.083 Mops <br><sub>5.3% of best</sub> | 1.092 Mops <br><sub>5.0% of best</sub> | 1.581 Mops <br><sub>7.9% of best</sub> | 0.00250% <br><sub>92.0% of best</sub> | 4546.4 <br><sub>73.8% of best</sub> |
+| blumea | 440.1 Kops <br><sub>2.1% of best</sub> | 387.8 Kops <br><sub>1.8% of best</sub> | 1.307 Mops <br><sub>6.5% of best</sub> | 1.00% <br><sub>0.2% of best</sub> | 6420.2 <br><sub>52.2% of best</sub> |
+| bloom-filters | 260.5 Kops <br><sub>1.3% of best</sub> | 293.4 Kops <br><sub>1.3% of best</sub> | 324.1 Kops <br><sub>1.6% of best</sub> | 0.00280% <br><sub>82.1% of best</sub> | **3353.3** <br><sub>100.0% of best</sub> |
