@@ -45,29 +45,41 @@ import { fileURLToPath } from "node:url";
  * filter.dispose();
  * ```
  */
+export type BloomFilterExport = Uint8Array;
+
 export default class FastBloomFilter {
+  private static readonly MAGIC :Uint8Array = new Uint8Array([0x46, 0x42, 0x46, 0x32]); // "FBF2"
+
   private readonly bitCount: number;
+  private readonly byteCount: number;
+
   private readonly hashCount: number;
+
   private readonly bitsetPtr: number;
+  
   private readonly ex: WasmExports;
 
   private readonly encoder: TextEncoder;
 
   private bufferPtr: number;
   private bufferSize: number;
-  private u8View: Uint8Array;
+  private bufferU8View: Uint8Array;
 
-  private constructor(bitCount: number, hashCount: number, ex: WasmExports) {
+  private constructor(bitCount: number, hashCount: number, ex: WasmExports, data?: Uint8Array) {
     // round up to the next multiple of 32
     this.bitCount = (bitCount + 31) & ~31;
-	const bytesCount = this.bitCount >>> 3;
-    this.bitsetPtr = ex.malloc(bytesCount);
+    this.byteCount = this.bitCount >>> 3;
+    this.bitsetPtr = ex.malloc(this.byteCount);
+    if (data) {
+      const bitsetU8View = new Uint8Array(ex.memory.buffer, this.bitsetPtr, this.byteCount);
+      bitsetU8View.set(data);
+    }
 
     this.hashCount = hashCount | 0;
     this.encoder = new TextEncoder();
     this.bufferPtr = 0;
     this.bufferSize = 0;
-    this.u8View = new Uint8Array(ex.memory.buffer, 0, 0);
+    this.bufferU8View = new Uint8Array(ex.memory.buffer, 0, 0);
 
     this.ex = ex;
   }
@@ -99,7 +111,7 @@ export default class FastBloomFilter {
     if (this.bufferPtr) this.ex.free(this.bufferPtr);
     this.bufferPtr = this.ex.malloc(newSize);
     this.bufferSize = newSize;
-    this.u8View = new Uint8Array(
+    this.bufferU8View = new Uint8Array(
       this.ex.memory.buffer,
       this.bufferPtr,
       this.bufferSize
@@ -110,7 +122,7 @@ export default class FastBloomFilter {
 
   addString(text: string) {
     this.ensureCapacity(text.length << 2); // Overprovision worst-case UTF-8 expansion
-    const { written } = this.encoder.encodeInto(text, this.u8View);
+    const { written } = this.encoder.encodeInto(text, this.bufferU8View);
     this.ex.bloom_add(
       this.bufferPtr,
       written,
@@ -122,7 +134,7 @@ export default class FastBloomFilter {
 
   hasString(text: string): boolean {
     this.ensureCapacity(text.length << 2);
-    const { written } = this.encoder.encodeInto(text, this.u8View);
+    const { written } = this.encoder.encodeInto(text, this.bufferU8View);
     return (
       this.ex.bloom_has(
         this.bufferPtr,
@@ -138,7 +150,7 @@ export default class FastBloomFilter {
 
   add(buffer: Uint8Array) {
     this.ensureCapacity(buffer.length);
-    this.u8View.set(buffer);
+    this.bufferU8View.set(buffer);
     this.ex.bloom_add(
       this.bufferPtr,
       buffer.length,
@@ -150,7 +162,7 @@ export default class FastBloomFilter {
 
   has(buffer: Uint8Array): boolean {
     this.ensureCapacity(buffer.length);
-    this.u8View.set(buffer);
+    this.bufferU8View.set(buffer);
     return (
       this.ex.bloom_has(
         this.bufferPtr,
@@ -160,6 +172,46 @@ export default class FastBloomFilter {
         this.bitsetPtr
       ) === 1
     );
+  }
+
+  export(): Uint8Array {
+    const bitsetU8View = new Uint8Array(this.ex.memory.buffer, this.bitsetPtr, this.byteCount);
+    const headerLength = FastBloomFilter.MAGIC.length + 8;
+    const exportBuffer = new ArrayBuffer(headerLength + bitsetU8View.length);
+    const exportView8 = new Uint8Array(exportBuffer);
+    exportView8.set(FastBloomFilter.MAGIC, 0);
+    const headerView = new DataView(exportBuffer, FastBloomFilter.MAGIC.length, 8);
+    headerView.setUint32(0, this.bitCount, true);
+    headerView.setUint32(4, this.hashCount, true);
+    exportView8.set(bitsetU8View, headerLength);
+    return exportView8;
+  }
+
+  static async import(exportedBloomFilter: Uint8Array): Promise<FastBloomFilter> {
+    const headerLength = FastBloomFilter.MAGIC.length + 8;
+
+    const { buffer, byteOffset, byteLength } = exportedBloomFilter;
+    const magicView = new Uint8Array(buffer, byteOffset, FastBloomFilter.MAGIC.length);
+    for (let i = 0; i < FastBloomFilter.MAGIC.length; i += 1) {
+      if (magicView[i] !== FastBloomFilter.MAGIC[i]) {
+        throw new Error("Invalid magic number");
+      }
+    }
+
+    const headerView = new DataView(buffer, byteOffset + FastBloomFilter.MAGIC.length, 8);
+    const bitCount = headerView.getUint32(0, true);
+    const hashCount = headerView.getUint32(4, true);
+
+    const expectedByteCount = ((bitCount + 31) & ~31) >>> 3;
+    const payloadLength = byteLength - headerLength;
+    if (payloadLength !== expectedByteCount) {
+      throw new Error("Bloom filter payload has unexpected length");
+    }
+
+    const data = new Uint8Array(buffer, byteOffset + headerLength, payloadLength);
+    const ex = await FastBloomFilter.instantiateWasm();
+
+    return new FastBloomFilter(bitCount, hashCount, ex, data);
   }
 
   // ---- Cleanup ----
