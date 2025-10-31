@@ -5,6 +5,17 @@
 	"type": "module",
 	"license": "ISC",
 	"author": "Nicolas Duran <nicolas@duran.lol>",
+	"keywords": [
+		"bloom-filter",
+		"bloom-filters",
+		"bloomfilter",
+		"bloomfilters",
+		"fast bloom filter",
+		"fast bloom filters",
+		"fast-bloom-filter",
+		"fast-bloom-filters",
+		"bloom filter wasm"
+	],
 	"repository": {
 		"type": "git",
 		"url": "git+https://github.com/NicolasDuran/fast-bloom-filter.git"
