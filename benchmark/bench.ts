@@ -26,7 +26,7 @@ function forceGC(label?: string) {
   }
 }
 
-// ---------- dataset helpers ----------
+
 function makeRng(seed = 0xdeadbeef >>> 0) {
   let x = seed >>> 0;
   return () => {
@@ -95,8 +95,6 @@ type Scenario = {
   bits: number;
   k: number;
   dataKind: "strings" | "buffer128k" | "buffer2m";
-  // NOTE: if you already have Q elsewhere, keep using it.
-  // If not, you can add: Q?: number;
 };
 const SCENARIOS: Scenario[] = [
   {
@@ -122,8 +120,8 @@ const SCENARIOS: Scenario[] = [
   },
   {
     name: "buf128k N=5k, M=2^20 (~64MB), K=12",
-    N: 5_00, // <- as in your snippet
-    bits: 2 ** 13, // <- as in your snippet
+    N: 5_00,
+    bits: 2 ** 13,
     k: 12,
     dataKind: "buffer128k",
   },
@@ -153,7 +151,6 @@ export type Row = {
   has_miss_mops: number;
   fp: number;
   fp_rate: number;
-  rssMB: number;
 };
 
 function makeOps(inst: AdapterInstance) {
@@ -212,7 +209,7 @@ async function benchAdapterScenario(
   // Decide which representation to pass to this adapter
   const useBuffer = dataKind !== "strings" && adapter.supportsBuffer;
 
-  // Warmup (small work to get JIT going)
+  // Warmup (to get JIT going)
   const warm = await adapter.create({ bits, k, N });
   const W = Math.min(5000, N);
   const { addAny: warmAdd, hasAny: warmHas } = makeOps(warm);
@@ -256,8 +253,7 @@ async function benchAdapterScenario(
   const has_miss_mops = +(N / has_miss_ms / 1000);
   const fp_rate = lastFP / N;
 
-  forceGC("final RSS");
-  const rssMB = +(process.memoryUsage().rss / MB);
+  forceGC("final");
 
   return {
     lib: adapter.name,
@@ -274,11 +270,10 @@ async function benchAdapterScenario(
     has_miss_mops,
     fp: lastFP,
     fp_rate,
-    rssMB,
   };
 }
 
-// ---- NEW: safe wrapper that isolates adapter failures ----
+// safe wrapper that isolates adapter failures
 async function tryBenchAdapterScenario(
   adapter: Adapter,
   sc: Scenario,
@@ -292,7 +287,6 @@ async function tryBenchAdapterScenario(
   }
 }
 
-// ---------- runner ----------
 async function main() {
   const rows: Row[] = [];
 
@@ -309,21 +303,18 @@ async function main() {
       console.warn(`\n[${sc.name}] No successful adapters for this scenario.`);
       continue;
     }
-    // Quick console summary (valid results only)
+    
     const fastest = perScenarioValid
       .slice()
       .sort((a, b) => b.add_mops - a.add_mops)[0];
     const lowestFP = perScenarioValid
       .slice()
       .sort((a, b) => a.fp_rate - b.fp_rate)[0];
-    const lowestRSS = perScenarioValid
-      .slice()
-      .sort((a, b) => a.rssMB - b.rssMB)[0];
+    
 
     console.log(
       `\n[${sc.name}] fastest add: ${fastest.lib} (${formatRateFromMops(fastest.add_mops).text}); ` +
-        `lowest FP: ${lowestFP.lib} (${(lowestFP.fp_rate * 100).toPrecision(3)}%); ` +
-        `lowest RSS: ${lowestRSS.lib} (${lowestRSS.rssMB.toFixed(1)} MB)`,
+        `lowest FP: ${lowestFP.lib} (${(lowestFP.fp_rate * 100).toPrecision(3)}%);`
     );
   }
 

@@ -45,13 +45,12 @@ function mdScenarioComparison(sName: string, rows: Row[] | undefined): string {
 	const bestHit = Math.max(...rows.map((r) => r.has_hit_mops));
 	const bestMiss = Math.max(...rows.map((r) => r.has_miss_mops));
 	const bestFP = Math.min(...rows.map((r) => r.fp_rate));
-	const bestRSS = Math.min(...rows.map((r) => r.rssMB));
 
 	// Sort adapters by add throughput desc
 	const sorted = rows.slice().sort((a, b) => b.add_mops - a.add_mops);
 
-	const header = `| Adapter | Add Throughput | Has-hit Throughput | Has-miss Throughput | FP Rate | RSS (MB) |`;
-	const sep = `|:--|--:|--:|--:|--:|--:|`;
+	const header = `| Adapter | Add Throughput | Has-hit Throughput | Has-miss Throughput | FP Rate |`;
+	const sep = `|:--|--:|--:|--:|--:|`;
 
 	const lines = sorted.map((r) => {
 		const addFmt = formatRateFromMops(r.add_mops);
@@ -77,13 +76,7 @@ function mdScenarioComparison(sName: string, rows: Row[] | undefined): string {
 			" <br>" +
 			relPctLowerIsBetter(r.fp_rate, bestFP);
 
-		const rssText = r.rssMB.toFixed(1);
-		const rssCell =
-			boldIfBest(rssText, r.rssMB === bestRSS) +
-			" <br>" +
-			relPctLowerIsBetter(r.rssMB, bestRSS);
-
-		return `| ${r.lib} | ${addCell} | ${hitCell} | ${missCell} | ${fpCell} | ${rssCell} |`;
+		return `| ${r.lib} | ${addCell} | ${hitCell} | ${missCell} | ${fpCell} |`;
 	});
 
 	const meta = sorted[0];
