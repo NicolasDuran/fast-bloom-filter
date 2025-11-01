@@ -9,7 +9,9 @@
 ---
 
 ## 💡 What is a Bloom Filter?
-A Bloom filter is a memory-efficient probabilistic set that guarantees no false negatives but tolerates the occasional false positive. It stores everything in an `m`-bit array, so larger `m` directly lowers the error rate. With `n` items and `k` hash functions the false-positive probability is `P_fp ≈ (1 - e^{-kn/m})^k`; using the near-optimal `k ≈ (m/n) ln 2` yields `m ≈ -(n ln p)/(ln 2)^2` bits to hit a target rate `p` (≈9.6 bits per element for `p = 0.01`).
+A Bloom filter is a probabilistic set that guarantees no false negatives but tolerates unlikely false positives. 
+
+With `n` items, `m` bits and `k` hash functions the false-positive probability is `P_fp ≈ (1 - e^{-kn/m})^k`; using the near-optimal `k ≈ (m/n) ln 2` yields `m ≈ -(n ln p)/(ln 2)^2` bits to hit a target rate `p` (≈9.6 bits per element for `p = 0.01`).
 
 
 
