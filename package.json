@@ -6,6 +6,8 @@
 	"license": "ISC",
 	"author": "Nicolas Duran <nicolas@duran.lol>",
 	"keywords": [
+		"bloom filter",
+		"bloom filters",
 		"bloom-filter",
 		"bloom-filters",
 		"bloomfilter",
