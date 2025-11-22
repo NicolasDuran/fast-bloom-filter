@@ -51,7 +51,8 @@
 		"build": "npm run build:wasm && npm run build:ts && npm run build:wasm:copy",
 		"test": "tsx --test",
 		"lint": "biome check --write",
-		"prepublishOnly": "npm run clean && npm run build"
+		"lint:check": "biome check",
+		"prepublishOnly": "npm run clean && npm run build && npm run lint:check"
 	},
 	"packageManager": "pnpm@10.18.3",
 	"devDependencies": {
