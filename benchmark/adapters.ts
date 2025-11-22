@@ -54,7 +54,7 @@ const adapterBloomFilter: Adapter = {
 };
 
 const adapterFastBloomFilter: Adapter = {
-	name: "FastFilterBloom",
+	name: "FastBloomFilter",
 	supportsBuffer: true,
 	async create({ bits, k }) {
 		const inst = await FastBloomFilter.create(bits, k);

@@ -71,7 +71,7 @@ restored.dispose();
   
   | Adapter | Add Throughput | Has-hit Throughput | Has-miss Throughput | FP Rate |
   |:--|--:|--:|--:|--:|
-  | FastFilterBloom | **24.28 Mops** <br><sub>100.0% of best</sub> | **24.33 Mops** <br><sub>100.0% of best</sub> | **22.25 Mops** <br><sub>100.0% of best</sub> | 0.00500% <br><sub>80.0% of best</sub> |
+  | FastBloomFilter | **24.28 Mops** <br><sub>100.0% of best</sub> | **24.33 Mops** <br><sub>100.0% of best</sub> | **22.25 Mops** <br><sub>100.0% of best</sub> | 0.00500% <br><sub>80.0% of best</sub> |
 | bloomfilter | 11.00 Mops <br><sub>45.3% of best</sub> | 10.25 Mops <br><sub>42.1% of best</sub> | 10.88 Mops <br><sub>48.9% of best</sub> | 0.00600% <br><sub>66.7% of best</sub> |
 | @ably/bloomit | 1.348 Mops <br><sub>5.6% of best</sub> | 1.399 Mops <br><sub>5.7% of best</sub> | 1.834 Mops <br><sub>8.2% of best</sub> | 0.00700% <br><sub>57.1% of best</sub> |
 | blumea | 567.1 Kops <br><sub>2.3% of best</sub> | 492.8 Kops <br><sub>2.0% of best</sub> | 1.444 Mops <br><sub>6.5% of best</sub> | 0.964% <br><sub>0.4% of best</sub> |
