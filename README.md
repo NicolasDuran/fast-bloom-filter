@@ -29,7 +29,10 @@ bun add fast-bloom-filter
 ```TypeScript
 import FastBloomFilter from "fast-bloom-filter";
 
-const bloomFilter = await FastBloomFilter.create(100, 4);
+// Create a bloom filter for 100 elements with an expected false positive rate of 0.01
+const bloomFilter = await FastBloomFilter.createOptimal(100, 0.01);
+// Create a bloom filter of 100 bits with 4 hash rounds
+//const bloomFilter = await FastBloomFilter.create(100, 4);
 
 bloomFilter.addString("hello");
 bloomFilter.add(Buffer.from([0x01, 0x02, 0x03]));
