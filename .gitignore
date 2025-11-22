@@ -2,5 +2,6 @@ dist/
 node_modules/
 src/wasm/*.wasm
 tests/_local/
+test_npm/
 benchmark/node_modules/
 *.tgz

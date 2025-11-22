@@ -14,9 +14,17 @@ describe("Import/export", () => {
 
 		const restored = await FastBloomFilter.import(snapshot);
 		for (const value of members) {
-			assert.strictEqual(restored.hasString(value), true, `Missing ${value} after import`);
+			assert.strictEqual(
+				restored.hasString(value),
+				true,
+				`Missing ${value} after import`,
+			);
 		}
-		assert.strictEqual(restored.hasString("delta"), false, "Unexpected element detected after import");
+		assert.strictEqual(
+			restored.hasString("delta"),
+			false,
+			"Unexpected element detected after import",
+		);
 		restored.dispose();
 	});
 
