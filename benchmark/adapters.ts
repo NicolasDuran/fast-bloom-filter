@@ -1,8 +1,7 @@
 import npm_bloomit from "@ably/bloomit";
 import npm_bloom_filter from "bloom-filter";
 import npm_bloom_filters from "bloom-filters";
-import npm_bloomfilter from "bloomfilter";
-import * as npm_blumea from "blumea";
+import { BloomFilter as npmBloomFilter } from "bloomfilter";
 import FastBloomFilter from "../src/bloomfilter.js";
 
 export type AdapterInstance = {
@@ -10,6 +9,7 @@ export type AdapterInstance = {
 	hasString?: (s: string) => boolean;
 	addBuffer?: (b: Buffer) => void;
 	hasBuffer?: (b: Buffer) => boolean;
+	dispose?: () => void;
 
 	// Required meta
 	bits: () => number;
@@ -43,7 +43,7 @@ const adapterBloomFilter: Adapter = {
 	name: "bloomfilter",
 	supportsBuffer: false,
 	async create({ bits, k }) {
-		const inst = new npm_bloomfilter.BloomFilter(bits, k);
+		const inst = new npmBloomFilter(bits, k);
 		return {
 			addString: (s) => inst.add(s),
 			hasString: (s) => inst.test(s),
@@ -63,6 +63,7 @@ const adapterFastBloomFilter: Adapter = {
 			hasString: (s: string) => inst.hasString(s),
 			addBuffer: (b: Buffer) => inst.add(b),
 			hasBuffer: (b: Buffer) => inst.has(b),
+			dispose: () => inst.dispose(),
 			bits: () => inst.bitCount,
 			k: () => k,
 		};
@@ -74,7 +75,7 @@ const adapter_npm_bloom_filter: Adapter = {
 	supportsBuffer: true,
 	async create({ bits, k }) {
 		const inst = new npm_bloom_filter({
-			vData: new Uint32Array(bits / 8).fill(0),
+			vData: new Uint8Array(bits / 8),
 			nHashFuncs: k,
 			nTweak: 2147483649,
 			nFlags: 0,
@@ -104,25 +105,10 @@ const adapter_npm_bloomit: Adapter = {
 	},
 };
 
-const adapter_npm_blumea: Adapter = {
-	name: "blumea",
-	supportsBuffer: false,
-	async create({ bits, k, N }) {
-		const inst = new npm_blumea.BloomFilter(N, 0.01);
-		return {
-			addString: (s: string) => inst.insert(s),
-			hasString: (s: string) => inst.find(s),
-			bits: () => bits,
-			k: () => k,
-		};
-	},
-};
-
 export const ADAPTERS: Adapter[] = [
 	adapterFastBloomFilter,
 	adapterBloomFilter,
 	adapter_npm_bloom_filters,
 	adapter_npm_bloom_filter,
 	adapter_npm_bloomit,
-	adapter_npm_blumea,
 ];

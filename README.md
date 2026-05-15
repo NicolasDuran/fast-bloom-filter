@@ -66,20 +66,19 @@ restored.dispose();
 
 [Complete benchmark results](benchmark/report.md)
 
-*Timings are medians of 3 runs with GC before/after each run. For adapters without Buffer support, buffer datasets are base64-encoded strings.*
+*Timings are medians of 3 runs with GC before/after each run. Buffer scenarios in the full report include only adapters with native Buffer support.*
   
-### strings N=1e5, M=2^21 (~2MB), K=10
+### strings N=1e5, M=2^21 (~256KiB), K=10
   
   - **N:** 100,000  •  **Bits:** 2,097,152  •  **K:** 10  •  **Data:** strings
   
   | Adapter | Add Throughput | Has-hit Throughput | Has-miss Throughput | FP Rate |
   |:--|--:|--:|--:|--:|
-  | FastBloomFilter | **24.28 Mops** <br><sub>100.0% of best</sub> | **24.33 Mops** <br><sub>100.0% of best</sub> | **22.25 Mops** <br><sub>100.0% of best</sub> | 0.00500% <br><sub>80.0% of best</sub> |
-| bloomfilter | 11.00 Mops <br><sub>45.3% of best</sub> | 10.25 Mops <br><sub>42.1% of best</sub> | 10.88 Mops <br><sub>48.9% of best</sub> | 0.00600% <br><sub>66.7% of best</sub> |
-| @ably/bloomit | 1.348 Mops <br><sub>5.6% of best</sub> | 1.399 Mops <br><sub>5.7% of best</sub> | 1.834 Mops <br><sub>8.2% of best</sub> | 0.00700% <br><sub>57.1% of best</sub> |
-| blumea | 567.1 Kops <br><sub>2.3% of best</sub> | 492.8 Kops <br><sub>2.0% of best</sub> | 1.444 Mops <br><sub>6.5% of best</sub> | 0.964% <br><sub>0.4% of best</sub> |
-| bloom-filters | 339.4 Kops <br><sub>1.4% of best</sub> | 345.4 Kops <br><sub>1.4% of best</sub> | 360.1 Kops <br><sub>1.6% of best</sub> | **0.00400%** <br><sub>100.0% of best</sub> |
-| bloom-filter | 215.5 Kops <br><sub>0.9% of best</sub> | 219.2 Kops <br><sub>0.9% of best</sub> | 1.272 Mops <br><sub>5.7% of best</sub> | 0.00600% <br><sub>66.7% of best</sub> |
+  | FastBloomFilter | **15.04 Mops** <br><sub>100.0% of best</sub> | **14.91 Mops** <br><sub>100.0% of best</sub> | **14.32 Mops** <br><sub>100.0% of best</sub> | 0.00500% <br><sub>80.0% of best</sub> |
+| bloomfilter | 8.410 Mops <br><sub>55.9% of best</sub> | 11.15 Mops <br><sub>74.8% of best</sub> | 6.935 Mops <br><sub>48.4% of best</sub> | 0.00600% <br><sub>66.7% of best</sub> |
+| @ably/bloomit | 1.459 Mops <br><sub>9.7% of best</sub> | 1.453 Mops <br><sub>9.7% of best</sub> | 2.157 Mops <br><sub>15.1% of best</sub> | 0.00700% <br><sub>57.1% of best</sub> |
+| bloom-filter | 220.0 Kops <br><sub>1.5% of best</sub> | 216.3 Kops <br><sub>1.5% of best</sub> | 1.220 Mops <br><sub>8.5% of best</sub> | 0.00600% <br><sub>66.7% of best</sub> |
+| bloom-filters | 171.1 Kops <br><sub>1.1% of best</sub> | 174.4 Kops <br><sub>1.2% of best</sub> | 167.3 Kops <br><sub>1.2% of best</sub> | **0.00400%** <br><sub>100.0% of best</sub> |
 
 ## 🧪 Development
 

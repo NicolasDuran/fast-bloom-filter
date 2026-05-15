@@ -99,11 +99,12 @@ export function makeMarkdownComparative(runs: number, rows: Row[]): string {
 	const intro = `# Bloom Filter Bench — Comparative Report
   
   **Date:** ${new Date().toISOString()}
+  **Runtime:** Node ${process.version} (${process.platform}/${process.arch})
   
   **Adapters:** ${libSet.join(", ")}  
   **Scenarios:** ${scenarios.length}
   
-  *Tables rank adapters within the same scenario. Primary values use **adaptive throughput units** (Ops/Kops/Mops/Gops). Sub-labels show percentage relative to the best in that metric (higher is better for throughput; lower is better for FP rate and RSS). Timings are medians of ${runs} runs with GC before/after each run. For adapters without Buffer support, buffer datasets are base64-encoded strings.*
+  *Tables rank adapters within the same fixed bit-count/hash-count scenario. Primary values use **adaptive throughput units** (Ops/Kops/Mops/Gops). Sub-labels show percentage relative to the best in that metric (higher is better for throughput; lower is better for FP rate). Timings are medians of ${runs} runs with GC before/after each run. Buffer scenarios include only adapters with native Buffer support.*
   `;
 
 	const blocks = scenarios.map((s) => mdScenarioComparison(s, byScenario[s]));

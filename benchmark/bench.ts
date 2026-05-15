@@ -66,12 +66,6 @@ function genBuffers(n: number, sizeBytes: number, seed = 2025): Buffer[] {
 	return out;
 }
 
-function buffersToB64(arr: Buffer[]): string[] {
-	const out = new Array<string>(arr.length);
-	for (let i = 0; i < arr.length; i++) out[i] = arr[i].toString("base64");
-	return out;
-}
-
 async function timeMedian(
 	runs: number,
 	fn: () => void | Promise<void>,
@@ -98,42 +92,42 @@ type Scenario = {
 };
 const SCENARIOS: Scenario[] = [
 	{
-		name: "strings N=1e5, M=2^21 (~2MB), K=10",
+		name: "strings N=1e5, M=2^21 (~256KiB), K=10",
 		N: 100_000,
 		bits: 2 ** 21,
 		k: 10,
 		dataKind: "strings",
 	},
 	{
-		name: "strings N=1e6, M=2^24 (~16MB), K=10",
+		name: "strings N=1e6, M=2^24 (~2MiB), K=10",
 		N: 1_000_000,
 		bits: 2 ** 24,
 		k: 10,
 		dataKind: "strings",
 	},
 	{
-		name: "strings N=3e6, M=2^26 (~64MB), K=12",
-		N: 3_000_000,
-		bits: 2 ** 26,
-		k: 12,
-		dataKind: "strings",
-	},
-	{
-		name: "buf128k N=5k, M=2^20 (~64MB), K=12",
-		N: 5_00,
+		name: "buf128k N=500, M=2^13 (~1KiB), K=12",
+		N: 500,
 		bits: 2 ** 13,
 		k: 12,
 		dataKind: "buffer128k",
 	},
 	{
-		name: "buf2m   N=500, M=2^27 (~128MB), K=12",
-		N: 500,
-		bits: 2 ** 27,
+		name: "buf2m   N=20, M=2^18 (~32KiB), K=12",
+		N: 20,
+		bits: 2 ** 18,
 		k: 12,
 		dataKind: "buffer2m",
 	},
 ];
-const RUNS = 3;
+const RUNS = Number(process.env.BENCH_RUNS ?? 3);
+
+type Dataset = {
+	presentStr: string[];
+	absentStr: string[];
+	presentBuf: Buffer[];
+	absentBuf: Buffer[];
+};
 
 // ---------- measurement model ----------
 export type Row = {
@@ -178,48 +172,44 @@ function makeOps(inst: AdapterInstance) {
 	};
 }
 
+function assertScenarioCompatibility(
+	adapter: Adapter,
+	inst: AdapterInstance,
+	bits: number,
+	k: number,
+) {
+	if (inst.bits() !== bits || inst.k() !== k) {
+		throw new Error(
+			`${adapter.name} created ${inst.bits()} bits/${inst.k()} hashes instead of ${bits} bits/${k} hashes`,
+		);
+	}
+}
+
 async function benchAdapterScenario(
 	adapter: Adapter,
 	sc: Scenario,
+	dataset: Dataset,
 ): Promise<Row> {
 	const { N, bits, k, dataKind } = sc;
-
-	// Generate datasets
-	let presentStr: string[] = [];
-	let absentStr: string[] = [];
-	let presentBuf: Buffer[] = [];
-	let absentBuf: Buffer[] = [];
-
-	if (dataKind === "strings") {
-		presentStr = genStrings(N, 1111);
-		absentStr = genStrings(N, 2222).map((s) => `z${s}`);
-	} else if (dataKind === "buffer128k") {
-		presentBuf = genBuffers(N, 128 * 1024, 3333);
-		absentBuf = genBuffers(N, 128 * 1024, 4444);
-		presentStr = buffersToB64(presentBuf);
-		absentStr = buffersToB64(absentBuf);
-	} else {
-		// buffer2m
-		presentBuf = genBuffers(N, 2 * 1024 * 1024, 5555);
-		absentBuf = genBuffers(N, 2 * 1024 * 1024, 6666);
-		presentStr = buffersToB64(presentBuf);
-		absentStr = buffersToB64(absentBuf);
-	}
+	const { presentStr, absentStr, presentBuf, absentBuf } = dataset;
 
 	// Decide which representation to pass to this adapter
 	const useBuffer = dataKind !== "strings" && adapter.supportsBuffer;
 
 	// Warmup (to get JIT going)
 	const warm = await adapter.create({ bits, k, N });
+	assertScenarioCompatibility(adapter, warm, bits, k);
 	const W = Math.min(5000, N);
 	const { addAny: warmAdd, hasAny: warmHas } = makeOps(warm);
 	for (let i = 0; i < W; i++)
 		warmAdd(useBuffer ? presentBuf[i] : presentStr[i]);
 	for (let i = 0; i < W; i++)
 		warmHas(useBuffer ? presentBuf[i] : presentStr[i]);
+	warm.dispose?.();
 
 	// Fresh instance for timed work
 	const f = await adapter.create({ bits, k, N });
+	assertScenarioCompatibility(adapter, f, bits, k);
 	const { addAny: addOp, hasAny: hasOp } = makeOps(f);
 
 	const add_ms = await timeMedian(RUNS, () => {
@@ -254,6 +244,9 @@ async function benchAdapterScenario(
 	});
 	const has_miss_mops = +(N / has_miss_ms / 1000);
 	const fp_rate = lastFP / N;
+	const actualBits = f.bits();
+	const actualK = f.k();
+	f.dispose?.();
 
 	forceGC("final");
 
@@ -262,8 +255,8 @@ async function benchAdapterScenario(
 		scenario: sc.name,
 		dataKind,
 		N,
-		bits,
-		k,
+		bits: actualBits,
+		k: actualK,
 		add_ms: +add_ms,
 		add_mops,
 		has_hit_ms: +has_hit_ms,
@@ -279,9 +272,10 @@ async function benchAdapterScenario(
 async function tryBenchAdapterScenario(
 	adapter: Adapter,
 	sc: Scenario,
+	dataset: Dataset,
 ): Promise<Row | null> {
 	try {
-		return await benchAdapterScenario(adapter, sc);
+		return await benchAdapterScenario(adapter, sc, dataset);
 	} catch (e: unknown) {
 		if (e instanceof Error) {
 			const msg = e.stack ?? e.message ?? String(e);
@@ -298,9 +292,14 @@ async function main() {
 	const rows: Row[] = [];
 
 	for (const sc of SCENARIOS) {
+		const dataset = prepareDataset(sc);
 		const perScenarioValid: Row[] = [];
-		for (const adapter of ADAPTERS) {
-			const r = await tryBenchAdapterScenario(adapter, sc);
+		const adapters =
+			sc.dataKind === "strings"
+				? ADAPTERS
+				: ADAPTERS.filter((adapter) => adapter.supportsBuffer);
+		for (const adapter of adapters) {
+			const r = await tryBenchAdapterScenario(adapter, sc, dataset);
 			if (r) {
 				perScenarioValid.push(r);
 				rows.push(r);
@@ -336,6 +335,29 @@ async function main() {
 	writeFileSync(mdPath, md, "utf8");
 
 	console.log(`\nWrote: ${mdPath}`);
+}
+
+function prepareDataset(sc: Scenario): Dataset {
+	if (sc.dataKind === "strings") {
+		return {
+			presentStr: genStrings(sc.N, 1111),
+			absentStr: genStrings(sc.N, 2222).map((s) => `z${s}`),
+			presentBuf: [],
+			absentBuf: [],
+		};
+	}
+
+	const sizeBytes = sc.dataKind === "buffer128k" ? 128 * 1024 : 2 * 1024 * 1024;
+	const presentSeed = sc.dataKind === "buffer128k" ? 3333 : 5555;
+	const absentSeed = sc.dataKind === "buffer128k" ? 4444 : 6666;
+	const presentBuf = genBuffers(sc.N, sizeBytes, presentSeed);
+	const absentBuf = genBuffers(sc.N, sizeBytes, absentSeed);
+	return {
+		presentStr: [],
+		absentStr: [],
+		presentBuf,
+		absentBuf,
+	};
 }
 
 main().catch((e) => {
