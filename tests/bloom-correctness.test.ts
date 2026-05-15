@@ -35,7 +35,7 @@ describe("Correctness", () => {
 		assert.strictEqual(filter.hasString(element), false);
 	});
 
-	test("hasAndAdd should work correctly", () => {
+	test("should preserve membership across separate has/add calls", () => {
 		const element = "test-element-2";
 		assert.strictEqual(
 			filter.hasString(element),

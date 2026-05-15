@@ -1,5 +1,5 @@
 # FAST-BLOOM-FILTER
-[![License: ISC](https://img.shields.io/badge/License-ISC-green.svg)](LICENSE)
+[![License: ISC](https://img.shields.io/badge/License-ISC-green.svg)](LICENSE.md)
 
 
 
@@ -24,6 +24,9 @@ pnpm add fast-bloom-filter
 # or
 bun add fast-bloom-filter
 ```
+
+Requires Node.js 22 or newer.
+
 ## 🛠️ Usage
 
 ```TypeScript
@@ -64,7 +67,7 @@ restored.dispose();
 
 ## 📊 Benchmarks
 
-[Complete benchmark results](benchmark/report.md)
+[Complete benchmark results](https://github.com/NicolasDuran/fast-bloom-filter/blob/main/benchmark/report.md)
 
 *Timings are medians of 3 runs with GC before/after each run. Buffer scenarios in the full report include only adapters with native Buffer support.*
   
