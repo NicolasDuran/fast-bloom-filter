@@ -19,6 +19,25 @@ describe("Bloom Filter create", () => {
 			/hashCount must be > 0/,
 		);
 	});
+
+	test("should reject non-integer or overflowing parameters", async () => {
+		await assert.rejects(
+			() => FastBloomFilter.create(Number.NaN, 4),
+			/bitCount must be a positive safe integer/,
+		);
+		await assert.rejects(
+			() => FastBloomFilter.create(100.5, 4),
+			/bitCount must be a positive safe integer/,
+		);
+		await assert.rejects(
+			() => FastBloomFilter.create(2 ** 32, 4),
+			/bitCount must be <=/,
+		);
+		await assert.rejects(
+			() => FastBloomFilter.create(100, Number.NaN),
+			/hashCount must be a positive safe integer/,
+		);
+	});
 });
 
 describe("Bloom Filter createOptimal", () => {
@@ -48,6 +67,17 @@ describe("Bloom Filter createOptimal", () => {
 		);
 		assert.rejects(
 			() => FastBloomFilter.createOptimal(100, 1),
+			/falsePositiveRate must be between 0 and 1/,
+		);
+	});
+
+	test("should reject invalid optimal-filter inputs", async () => {
+		await assert.rejects(
+			() => FastBloomFilter.createOptimal(Number.NaN, 0.01),
+			/expectedItems must be a positive safe integer/,
+		);
+		await assert.rejects(
+			() => FastBloomFilter.createOptimal(100, Number.NaN),
 			/falsePositiveRate must be between 0 and 1/,
 		);
 	});

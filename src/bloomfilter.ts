@@ -51,6 +51,11 @@ export default class FastBloomFilter {
 	private static readonly _MAGIC: Uint8Array = new Uint8Array([
 		0x46, 0x42, 0x46, 0x32,
 	]); // "FBF2"
+	private static readonly _WORD_BITS = 32;
+	private static readonly _MAX_UINT32 = 0xffff_ffff;
+	private static readonly _MAX_BIT_COUNT =
+		FastBloomFilter._MAX_UINT32 -
+		(FastBloomFilter._MAX_UINT32 % FastBloomFilter._WORD_BITS);
 
 	private readonly _bitCount: number;
 	private readonly _byteCount: number;
@@ -58,10 +63,11 @@ export default class FastBloomFilter {
 
 	private readonly _encoder: TextEncoder;
 	private readonly _ex: WasmExports;
-	private readonly _bitsetPtr: number;
+	private _bitsetPtr: number;
 	private _bufferPtr: number;
 	private _bufferSize: number;
 	private _bufferU8View: Uint8Array;
+	private _disposed: boolean;
 
 	public get bitCount(): number {
 		return this._bitCount;
@@ -77,9 +83,12 @@ export default class FastBloomFilter {
 		data?: Uint8Array,
 	) {
 		// round up to the next multiple of 32
-		this._bitCount = (bitCount + 31) & ~31;
-		this._byteCount = this._bitCount >>> 3;
+		this._bitCount = FastBloomFilter.roundBitCount(bitCount);
+		this._byteCount = this._bitCount / 8;
 		this._bitsetPtr = ex.malloc(this._byteCount);
+		if (!this._bitsetPtr) {
+			throw new Error("Unable to allocate WASM bitset");
+		}
 		if (data) {
 			const bitsetU8View = new Uint8Array(
 				ex.memory.buffer,
@@ -89,11 +98,12 @@ export default class FastBloomFilter {
 			bitsetU8View.set(data);
 		}
 
-		this._hashCount = hashCount | 0;
+		this._hashCount = hashCount;
 		this._encoder = new TextEncoder();
 		this._bufferPtr = 0;
 		this._bufferSize = 0;
 		this._bufferU8View = new Uint8Array(ex.memory.buffer, 0, 0);
+		this._disposed = false;
 
 		this._ex = ex;
 	}
@@ -109,12 +119,7 @@ export default class FastBloomFilter {
 		bitCount: number,
 		hashCount: number,
 	): Promise<FastBloomFilter> {
-		if (bitCount <= 0) {
-			throw new Error("bitCount must be > 0");
-		}
-		if (hashCount <= 0) {
-			throw new Error("hashCount must be > 0");
-		}
+		FastBloomFilter.assertValidParameters(bitCount, hashCount);
 
 		const ex = await FastBloomFilter.instantiateWasm();
 		return new FastBloomFilter(bitCount, hashCount, ex);
@@ -130,10 +135,17 @@ export default class FastBloomFilter {
 		expectedItems: number,
 		falsePositiveRate: number,
 	): Promise<FastBloomFilter> {
+		if (!Number.isSafeInteger(expectedItems)) {
+			throw new Error("expectedItems must be a positive safe integer");
+		}
 		if (expectedItems <= 0) {
 			throw new Error("expectedItems must be > 0");
 		}
-		if (falsePositiveRate <= 0 || falsePositiveRate >= 1) {
+		if (
+			!Number.isFinite(falsePositiveRate) ||
+			falsePositiveRate <= 0 ||
+			falsePositiveRate >= 1
+		) {
 			throw new Error("falsePositiveRate must be between 0 and 1");
 		}
 
@@ -154,13 +166,54 @@ export default class FastBloomFilter {
 		return instance.exports as unknown as WasmExports;
 	}
 
+	private static roundBitCount(bitCount: number): number {
+		return (
+			Math.ceil(bitCount / FastBloomFilter._WORD_BITS) *
+			FastBloomFilter._WORD_BITS
+		);
+	}
+
+	private static assertValidParameters(
+		bitCount: number,
+		hashCount: number,
+	): void {
+		if (!Number.isSafeInteger(bitCount)) {
+			throw new Error("bitCount must be a positive safe integer");
+		}
+		if (bitCount <= 0) {
+			throw new Error("bitCount must be > 0");
+		}
+		if (bitCount > FastBloomFilter._MAX_BIT_COUNT) {
+			throw new Error(`bitCount must be <= ${FastBloomFilter._MAX_BIT_COUNT}`);
+		}
+		if (!Number.isSafeInteger(hashCount)) {
+			throw new Error("hashCount must be a positive safe integer");
+		}
+		if (hashCount <= 0) {
+			throw new Error("hashCount must be > 0");
+		}
+		if (hashCount > FastBloomFilter._MAX_UINT32) {
+			throw new Error(`hashCount must be <= ${FastBloomFilter._MAX_UINT32}`);
+		}
+	}
+
+	private assertUsable(): void {
+		if (this._disposed) {
+			throw new Error("Bloom filter has been disposed");
+		}
+	}
+
 	// Ensure the temp input buffer is large enough; if not, free and reallocate
-	ensureCapacity(utf8Len: number) {
+	private ensureCapacity(utf8Len: number) {
 		if (utf8Len <= this._bufferSize) return;
 		let newSize = this._bufferSize ? this._bufferSize : 256;
-		while (newSize < utf8Len) newSize <<= 1;
+		while (newSize < utf8Len) newSize *= 2;
+		const nextBufferPtr = this._ex.malloc(newSize);
+		if (!nextBufferPtr) {
+			throw new Error("Unable to allocate WASM input buffer");
+		}
 		if (this._bufferPtr) this._ex.free(this._bufferPtr);
-		this._bufferPtr = this._ex.malloc(newSize);
+		this._bufferPtr = nextBufferPtr;
 		this._bufferSize = newSize;
 		this._bufferU8View = new Uint8Array(
 			this._ex.memory.buffer,
@@ -172,7 +225,8 @@ export default class FastBloomFilter {
 	// ---- String-based API ----
 
 	addString(text: string) {
-		this.ensureCapacity(text.length << 2); // Overprovision worst-case UTF-8 expansion
+		this.assertUsable();
+		this.ensureCapacity(text.length * 4); // Overprovision worst-case UTF-8 expansion
 		const { written } = this._encoder.encodeInto(text, this._bufferU8View);
 		this._ex.bloom_add(
 			this._bufferPtr,
@@ -184,7 +238,8 @@ export default class FastBloomFilter {
 	}
 
 	hasString(text: string): boolean {
-		this.ensureCapacity(text.length << 2);
+		this.assertUsable();
+		this.ensureCapacity(text.length * 4);
 		const { written } = this._encoder.encodeInto(text, this._bufferU8View);
 		return (
 			this._ex.bloom_has(
@@ -200,6 +255,7 @@ export default class FastBloomFilter {
 	// ---- Raw buffer API ----
 
 	add(buffer: Uint8Array) {
+		this.assertUsable();
 		this.ensureCapacity(buffer.length);
 		this._bufferU8View.set(buffer);
 		this._ex.bloom_add(
@@ -212,6 +268,7 @@ export default class FastBloomFilter {
 	}
 
 	has(buffer: Uint8Array): boolean {
+		this.assertUsable();
 		this.ensureCapacity(buffer.length);
 		this._bufferU8View.set(buffer);
 		return (
@@ -226,6 +283,7 @@ export default class FastBloomFilter {
 	}
 
 	export(): Uint8Array {
+		this.assertUsable();
 		const bitsetU8View = new Uint8Array(
 			this._ex.memory.buffer,
 			this._bitsetPtr,
@@ -252,6 +310,9 @@ export default class FastBloomFilter {
 		const headerLength = FastBloomFilter._MAGIC.length + 8;
 
 		const { buffer, byteOffset, byteLength } = exportedBloomFilter;
+		if (byteLength < headerLength) {
+			throw new Error("Bloom filter export is truncated");
+		}
 		const magicView = new Uint8Array(
 			buffer,
 			byteOffset,
@@ -270,8 +331,9 @@ export default class FastBloomFilter {
 		);
 		const bitCount = headerView.getUint32(0, true);
 		const hashCount = headerView.getUint32(4, true);
+		FastBloomFilter.assertValidParameters(bitCount, hashCount);
 
-		const expectedByteCount = ((bitCount + 31) & ~31) >>> 3;
+		const expectedByteCount = FastBloomFilter.roundBitCount(bitCount) / 8;
 		const payloadLength = byteLength - headerLength;
 		if (payloadLength !== expectedByteCount) {
 			throw new Error("Bloom filter payload has unexpected length");
@@ -290,12 +352,18 @@ export default class FastBloomFilter {
 	// ---- Cleanup ----
 
 	dispose() {
+		if (this._disposed) return;
 		if (this._bufferPtr) {
 			this._ex.free(this._bufferPtr);
 			this._bufferPtr = 0;
 			this._bufferSize = 0;
+			this._bufferU8View = new Uint8Array(this._ex.memory.buffer, 0, 0);
 		}
-		if (this._bitsetPtr) this._ex.free(this._bitsetPtr);
+		if (this._bitsetPtr) {
+			this._ex.free(this._bitsetPtr);
+			this._bitsetPtr = 0;
+		}
+		this._disposed = true;
 	}
 }
 

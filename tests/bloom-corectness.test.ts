@@ -59,4 +59,19 @@ describe("Correctness", () => {
 		assert.strictEqual(filter.hasString(elem1), true, "Should find elem1");
 		assert.strictEqual(filter.hasString(elem2), false, "Should not find elem2");
 	});
+
+	test("should reject operations after disposal", async () => {
+		const disposed = await FastBloomFilter.create(128, 3);
+		disposed.dispose();
+		disposed.dispose();
+		assert.throws(
+			() => disposed.addString("after-dispose"),
+			/Bloom filter has been disposed/,
+		);
+		assert.throws(
+			() => disposed.hasString("after-dispose"),
+			/Bloom filter has been disposed/,
+		);
+		assert.throws(() => disposed.export(), /Bloom filter has been disposed/);
+	});
 });

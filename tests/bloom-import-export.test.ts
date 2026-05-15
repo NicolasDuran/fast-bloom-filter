@@ -29,7 +29,8 @@ describe("Import/export", () => {
 	});
 
 	test("import fails on invalid magic number", async () => {
-		const invalidMagic = new Uint8Array([0x46, 0x42, 0x46, 0x31]); // "FBF1" instead of "FBF2"
+		const invalidMagic = new Uint8Array(12);
+		invalidMagic.set([0x46, 0x42, 0x46, 0x31]); // "FBF1" instead of "FBF2"
 		await assert.rejects(
 			() => FastBloomFilter.import(invalidMagic),
 			/Invalid magic number/,
@@ -67,6 +68,22 @@ describe("Import/export", () => {
 			() => FastBloomFilter.import(truncated),
 			/unexpected length/,
 			"Import should fail when payload length does not match bitset size",
+		);
+	});
+
+	test("rejects headers shorter than the serialized format", async () => {
+		await assert.rejects(
+			() => FastBloomFilter.import(new Uint8Array([0x46, 0x42, 0x46, 0x32])),
+			/Bloom filter export is truncated/,
+		);
+	});
+
+	test("rejects zero-valued serialized parameters", async () => {
+		const invalid = new Uint8Array(12);
+		invalid.set([0x46, 0x42, 0x46, 0x32]);
+		await assert.rejects(
+			() => FastBloomFilter.import(invalid),
+			/bitCount must be > 0/,
 		);
 	});
 });
