@@ -80,3 +80,20 @@ restored.dispose();
 | blumea | 567.1 Kops <br><sub>2.3% of best</sub> | 492.8 Kops <br><sub>2.0% of best</sub> | 1.444 Mops <br><sub>6.5% of best</sub> | 0.964% <br><sub>0.4% of best</sub> |
 | bloom-filters | 339.4 Kops <br><sub>1.4% of best</sub> | 345.4 Kops <br><sub>1.4% of best</sub> | 360.1 Kops <br><sub>1.6% of best</sub> | **0.00400%** <br><sub>100.0% of best</sub> |
 | bloom-filter | 215.5 Kops <br><sub>0.9% of best</sub> | 219.2 Kops <br><sub>0.9% of best</sub> | 1.272 Mops <br><sub>5.7% of best</sub> | 0.00600% <br><sub>66.7% of best</sub> |
+
+## 🧪 Development
+
+The checked-in WASM artifact lets a fresh clone run the TypeScript tests and build the distributable package without requiring Emscripten locally.
+
+```bash
+pnpm install
+pnpm test
+pnpm build
+```
+
+If you change the C sources under `src/wasm/`, rebuild the artifact with Emscripten before publishing:
+
+```bash
+pnpm build:wasm
+pnpm build:full
+```

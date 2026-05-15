@@ -48,11 +48,12 @@
 		"build:wasm": "emcc -O3 --no-entry -msimd128 -flto -s \"EXPORTED_FUNCTIONS=['_malloc','_free']\" -o ./src/wasm/bloomfilter.wasm ./src/wasm/xxhash.c ./src/wasm/bloomfilter.c",
 		"build:wasm:copy": "mkdir -p dist/wasm && cp ./src/wasm/bloomfilter.wasm ./dist/wasm/bloomfilter.wasm",
 		"build:ts": "tsup",
-		"build": "npm run build:wasm && npm run build:ts && npm run build:wasm:copy",
-		"test": "tsx --test",
+		"build": "npm run build:ts && npm run build:wasm:copy",
+		"build:full": "npm run build:wasm && npm run build",
+		"test": "tsx --test tests/*.test.ts",
 		"lint": "biome check --write",
 		"lint:check": "biome check",
-		"prepublishOnly": "npm run clean && npm run build && npm run lint:check"
+		"prepublishOnly": "npm run clean && npm run build:full && npm run lint:check"
 	},
 	"packageManager": "pnpm@10.18.3",
 	"devDependencies": {
