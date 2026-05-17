@@ -1,6 +1,8 @@
 import * as fs from "node:fs";
 import { fileURLToPath } from "node:url";
 
+let wasmModulePromise: Promise<WebAssembly.Module> | undefined;
+
 // type FastBloomFilter = {
 // 	addString(text: string): void; // Insert a UTF-8 string into the filter
 // 	hasString(text: string): boolean; // Check a UTF-8 string
@@ -160,11 +162,23 @@ export default class FastBloomFilter {
 	}
 
 	private static async instantiateWasm(): Promise<WasmExports> {
+		const module = await FastBloomFilter.loadWasmModule();
+		const instance = await WebAssembly.instantiate(module);
+		return instance.exports as unknown as WasmExports;
+	}
+
+	private static loadWasmModule(): Promise<WebAssembly.Module> {
+		if (!wasmModulePromise) {
+			wasmModulePromise = FastBloomFilter.compileWasmModule();
+		}
+		return wasmModulePromise;
+	}
+
+	private static async compileWasmModule(): Promise<WebAssembly.Module> {
 		const wasmUrl = new URL("./wasm/bloomfilter.wasm", import.meta.url);
 		const wasmPath = fileURLToPath(wasmUrl);
 		const wasmBuffer = fs.readFileSync(wasmPath);
-		const { instance } = await WebAssembly.instantiate(wasmBuffer);
-		return instance.exports as unknown as WasmExports;
+		return WebAssembly.compile(wasmBuffer);
 	}
 
 	private static roundBitCount(bitCount: number): number {
