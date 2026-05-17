@@ -1,6 +1,6 @@
 {
 	"name": "fast-bloom-filter",
-	"version": "2.1.1",
+	"version": "3.0.0",
 	"description": "Fastest Bloom Filter on NPM. Powered by WASM, written in TypeScript & C.",
 	"type": "module",
 	"license": "ISC",
