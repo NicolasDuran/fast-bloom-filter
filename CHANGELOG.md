@@ -12,6 +12,6 @@
 
 - Cache the compiled WASM module and load its bytes asynchronously before instantiating filters.
 - Keep runtime constants private to the module instead of exposing them on the public class export.
-- Make clean checkouts self-contained with a checked-in WASM artifact and CI coverage.
+- Make clean checkouts and standard package builds self-contained with a checked-in WASM artifact and CI coverage.
 - Refresh benchmark methodology, package metadata, and dependency hygiene.
 - Expand deterministic test coverage across raw bytes, UTF-8 inputs, empty strings, and serialized edge cases.

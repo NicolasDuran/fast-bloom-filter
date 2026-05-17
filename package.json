@@ -53,7 +53,7 @@
 		"test": "tsx --test tests/*.test.ts",
 		"lint": "biome check --write",
 		"lint:check": "biome check",
-		"prepublishOnly": "npm run clean && npm run build:full && npm run lint:check"
+		"prepublishOnly": "npm run clean && npm run build && npm run lint:check"
 	},
 	"packageManager": "pnpm@10.18.3",
 	"devDependencies": {
