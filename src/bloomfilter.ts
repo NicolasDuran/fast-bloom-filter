@@ -53,6 +53,7 @@ export default class FastBloomFilter {
 	]); // "FBF2"
 	private static readonly _WORD_BITS = 32;
 	private static readonly _MAX_UINT32 = 0xffff_ffff;
+	private static readonly _MAX_HASH_COUNT = 1_024;
 	private static readonly _MAX_BIT_COUNT =
 		FastBloomFilter._MAX_UINT32 -
 		(FastBloomFilter._MAX_UINT32 % FastBloomFilter._WORD_BITS);
@@ -192,8 +193,10 @@ export default class FastBloomFilter {
 		if (hashCount <= 0) {
 			throw new Error("hashCount must be > 0");
 		}
-		if (hashCount > FastBloomFilter._MAX_UINT32) {
-			throw new Error(`hashCount must be <= ${FastBloomFilter._MAX_UINT32}`);
+		if (hashCount > FastBloomFilter._MAX_HASH_COUNT) {
+			throw new Error(
+				`hashCount must be <= ${FastBloomFilter._MAX_HASH_COUNT}`,
+			);
 		}
 	}
 

@@ -40,6 +40,10 @@ describe("Bloom Filter create", () => {
 			() => FastBloomFilter.create(100, Number.NaN),
 			/hashCount must be a positive safe integer/,
 		);
+		await assert.rejects(
+			() => FastBloomFilter.create(100, 1_025),
+			/hashCount must be <= 1024/,
+		);
 	});
 });
 
