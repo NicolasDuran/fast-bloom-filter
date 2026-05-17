@@ -60,6 +60,27 @@ describe("Correctness", () => {
 		assert.strictEqual(filter.hasString(elem2), false, "Should not find elem2");
 	});
 
+	test("should support raw byte buffers", () => {
+		const present = Uint8Array.from([0x00, 0x01, 0xfe, 0xff]);
+		const absent = Uint8Array.from([0x00, 0x01, 0xfe, 0x7f]);
+
+		assert.strictEqual(filter.has(present), false);
+		filter.add(present);
+		assert.strictEqual(filter.has(present), true);
+		assert.strictEqual(filter.has(absent), false);
+	});
+
+	test("should support UTF-8 and empty-string keys", () => {
+		const unicode = "héllø-世界";
+		assert.strictEqual(filter.hasString(unicode), false);
+		filter.addString(unicode);
+		assert.strictEqual(filter.hasString(unicode), true);
+
+		assert.strictEqual(filter.hasString(""), false);
+		filter.addString("");
+		assert.strictEqual(filter.hasString(""), true);
+	});
+
 	test("should reject operations after disposal", async () => {
 		const disposed = await FastBloomFilter.create(128, 3);
 		disposed.dispose();

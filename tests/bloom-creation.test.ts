@@ -9,12 +9,15 @@ describe("Bloom Filter create", () => {
 		assert.equal(filter.hashCount, 4);
 	});
 
-	test("should throw an error if the bit count is less than 0", () => {
-		assert.rejects(() => FastBloomFilter.create(0, 4), /bitCount must be > 0/);
+	test("should throw an error if the bit count is less than 0", async () => {
+		await assert.rejects(
+			() => FastBloomFilter.create(0, 4),
+			/bitCount must be > 0/,
+		);
 	});
 
-	test("should throw an error if the hash count is less than 0", () => {
-		assert.rejects(
+	test("should throw an error if the hash count is less than 0", async () => {
+		await assert.rejects(
 			() => FastBloomFilter.create(100, 0),
 			/hashCount must be > 0/,
 		);
@@ -53,19 +56,19 @@ describe("Bloom Filter createOptimal", () => {
 		assert.equal(filter.hashCount, 13);
 	});
 
-	test("should throw an error if the expected items is less than 0", () => {
-		assert.rejects(
+	test("should throw an error if the expected items is less than 0", async () => {
+		await assert.rejects(
 			() => FastBloomFilter.createOptimal(0, 0.01),
 			/expectedItems must be > 0/,
 		);
 	});
 
-	test("should throw an error if the false positive rate is less than 0 or greater than 1", () => {
-		assert.rejects(
+	test("should throw an error if the false positive rate is less than 0 or greater than 1", async () => {
+		await assert.rejects(
 			() => FastBloomFilter.createOptimal(100, 0),
 			/falsePositiveRate must be between 0 and 1/,
 		);
-		assert.rejects(
+		await assert.rejects(
 			() => FastBloomFilter.createOptimal(100, 1),
 			/falsePositiveRate must be between 0 and 1/,
 		);

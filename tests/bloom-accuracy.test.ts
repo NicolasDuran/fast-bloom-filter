@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { randomBytes } from "node:crypto";
 import test, { describe } from "node:test";
 import FastBloomFilter from "../src/bloomfilter.js";
 
@@ -20,27 +19,40 @@ function cumulativeInsertionFalsePositives(elements, size, hashCount) {
 	return Math.round(totalFP);
 }
 
-function generateRandomStringCrypto(length) {
+function makeRng(seed = 0xdeadbeef >>> 0) {
+	let x = seed >>> 0;
+	return () => {
+		x ^= x << 13;
+		x >>>= 0;
+		x ^= x >> 17;
+		x >>>= 0;
+		x ^= x << 5;
+		x >>>= 0;
+		return x;
+	};
+}
+
+function generateDeterministicString(length, rng) {
 	const chars =
 		"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-	const bytes = randomBytes(length);
 	let result = "";
 	for (let i = 0; i < length; i++) {
-		result += chars[bytes[i] % chars.length];
+		result += chars[rng() % chars.length];
 	}
 	return result;
 }
 
-function generateManyStrings(count, length) {
+function generateManyStrings(count, length, seed = 1234) {
+	const rng = makeRng(seed);
 	const result = new Array(count);
 	for (let i = 0; i < count; i++) {
-		result[i] = generateRandomStringCrypto(length);
+		result[i] = generateDeterministicString(length, rng);
 	}
 	return result;
 }
 
 // Generate once for the whole file
-const randomStringWith1Duplicate = generateManyStrings(1_000_000, 8);
+const deterministicStrings = generateManyStrings(1_000_000, 8);
 const accuracyBound = 0.05; // ±5%
 
 /** @param {number} actual @param {number} expected @param {number} bound */
@@ -60,7 +72,7 @@ describe("Accuracy - 10^6 elements", () => {
 		const filter = await FastBloomFilter.create(totalBitCount, hashCount);
 
 		let duplicates = 0;
-		for (const element of randomStringWith1Duplicate) {
+		for (const element of deterministicStrings) {
 			const exist = filter.hasString(element);
 			if (exist) duplicates++;
 			else filter.addString(element);
@@ -79,14 +91,14 @@ describe("Accuracy - 10^6 elements", () => {
 		const filter = await FastBloomFilter.create(totalBitCount, hashCount);
 
 		let duplicates = 0;
-		for (const element of randomStringWith1Duplicate) {
+		for (const element of deterministicStrings) {
 			const exist = filter.hasString(element);
 			if (exist) duplicates++;
 			else filter.addString(element);
 		}
 		filter.dispose();
 		const expectedFalsePositives = cumulativeInsertionFalsePositives(
-			randomStringWith1Duplicate.length,
+			deterministicStrings.length,
 			totalBitCount,
 			hashCount,
 		);
@@ -105,14 +117,14 @@ describe("Accuracy - 10^6 elements", () => {
 		const filter = await FastBloomFilter.create(totalBitCount, hashCount);
 
 		let duplicates = 0;
-		for (const element of randomStringWith1Duplicate) {
+		for (const element of deterministicStrings) {
 			const exist = filter.hasString(element);
 			if (exist) duplicates++;
 			else filter.addString(element);
 		}
 		filter.dispose();
 		const expectedFalsePositives = cumulativeInsertionFalsePositives(
-			randomStringWith1Duplicate.length,
+			deterministicStrings.length,
 			totalBitCount,
 			hashCount,
 		);
@@ -131,14 +143,14 @@ describe("Accuracy - 10^6 elements", () => {
 		const filter = await FastBloomFilter.create(totalBitCount, hashCount);
 
 		let duplicates = 0;
-		for (const element of randomStringWith1Duplicate) {
+		for (const element of deterministicStrings) {
 			const exist = filter.hasString(element);
 			if (exist) duplicates++;
 			else filter.addString(element);
 		}
 
 		const expectedFalsePositives = cumulativeInsertionFalsePositives(
-			randomStringWith1Duplicate.length,
+			deterministicStrings.length,
 			totalBitCount,
 			hashCount,
 		);
