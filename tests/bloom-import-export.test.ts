@@ -86,4 +86,17 @@ describe("Import/export", () => {
 			/bitCount must be > 0/,
 		);
 	});
+
+	test("rejects serialized filters with excessive hash counts", async () => {
+		const invalid = new Uint8Array(16);
+		invalid.set([0x46, 0x42, 0x46, 0x32]);
+		const header = new DataView(invalid.buffer, 4, 8);
+		header.setUint32(0, 32, true);
+		header.setUint32(4, 1_025, true);
+
+		await assert.rejects(
+			() => FastBloomFilter.import(invalid),
+			/hashCount must be <= 1024/,
+		);
+	});
 });
