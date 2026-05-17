@@ -1,6 +1,12 @@
 import * as fs from "node:fs";
 import { fileURLToPath } from "node:url";
 
+const MAGIC = new Uint8Array([0x46, 0x42, 0x46, 0x32]); // "FBF2"
+const WORD_BITS = 32;
+const MAX_UINT32 = 0xffff_ffff;
+const MAX_HASH_COUNT = 1_024;
+const MAX_BIT_COUNT = MAX_UINT32 - (MAX_UINT32 % WORD_BITS);
+
 let wasmModulePromise: Promise<WebAssembly.Module> | undefined;
 
 // type FastBloomFilter = {
@@ -50,16 +56,6 @@ let wasmModulePromise: Promise<WebAssembly.Module> | undefined;
 export type BloomFilterExport = Uint8Array;
 
 export default class FastBloomFilter {
-	private static readonly _MAGIC: Uint8Array = new Uint8Array([
-		0x46, 0x42, 0x46, 0x32,
-	]); // "FBF2"
-	private static readonly _WORD_BITS = 32;
-	private static readonly _MAX_UINT32 = 0xffff_ffff;
-	private static readonly _MAX_HASH_COUNT = 1_024;
-	private static readonly _MAX_BIT_COUNT =
-		FastBloomFilter._MAX_UINT32 -
-		(FastBloomFilter._MAX_UINT32 % FastBloomFilter._WORD_BITS);
-
 	private readonly _bitCount: number;
 	private readonly _byteCount: number;
 	private readonly _hashCount: number;
@@ -182,10 +178,7 @@ export default class FastBloomFilter {
 	}
 
 	private static roundBitCount(bitCount: number): number {
-		return (
-			Math.ceil(bitCount / FastBloomFilter._WORD_BITS) *
-			FastBloomFilter._WORD_BITS
-		);
+		return Math.ceil(bitCount / WORD_BITS) * WORD_BITS;
 	}
 
 	private static assertValidParameters(
@@ -198,8 +191,8 @@ export default class FastBloomFilter {
 		if (bitCount <= 0) {
 			throw new Error("bitCount must be > 0");
 		}
-		if (bitCount > FastBloomFilter._MAX_BIT_COUNT) {
-			throw new Error(`bitCount must be <= ${FastBloomFilter._MAX_BIT_COUNT}`);
+		if (bitCount > MAX_BIT_COUNT) {
+			throw new Error(`bitCount must be <= ${MAX_BIT_COUNT}`);
 		}
 		if (!Number.isSafeInteger(hashCount)) {
 			throw new Error("hashCount must be a positive safe integer");
@@ -207,10 +200,8 @@ export default class FastBloomFilter {
 		if (hashCount <= 0) {
 			throw new Error("hashCount must be > 0");
 		}
-		if (hashCount > FastBloomFilter._MAX_HASH_COUNT) {
-			throw new Error(
-				`hashCount must be <= ${FastBloomFilter._MAX_HASH_COUNT}`,
-			);
+		if (hashCount > MAX_HASH_COUNT) {
+			throw new Error(`hashCount must be <= ${MAX_HASH_COUNT}`);
 		}
 	}
 
@@ -306,15 +297,11 @@ export default class FastBloomFilter {
 			this._bitsetPtr,
 			this._byteCount,
 		);
-		const headerLength = FastBloomFilter._MAGIC.length + 8;
+		const headerLength = MAGIC.length + 8;
 		const exportBuffer = new ArrayBuffer(headerLength + bitsetU8View.length);
 		const exportView8 = new Uint8Array(exportBuffer);
-		exportView8.set(FastBloomFilter._MAGIC, 0);
-		const headerView = new DataView(
-			exportBuffer,
-			FastBloomFilter._MAGIC.length,
-			8,
-		);
+		exportView8.set(MAGIC, 0);
+		const headerView = new DataView(exportBuffer, MAGIC.length, 8);
 		headerView.setUint32(0, this._bitCount, true);
 		headerView.setUint32(4, this._hashCount, true);
 		exportView8.set(bitsetU8View, headerLength);
@@ -324,28 +311,20 @@ export default class FastBloomFilter {
 	static async import(
 		exportedBloomFilter: Uint8Array,
 	): Promise<FastBloomFilter> {
-		const headerLength = FastBloomFilter._MAGIC.length + 8;
+		const headerLength = MAGIC.length + 8;
 
 		const { buffer, byteOffset, byteLength } = exportedBloomFilter;
 		if (byteLength < headerLength) {
 			throw new Error("Bloom filter export is truncated");
 		}
-		const magicView = new Uint8Array(
-			buffer,
-			byteOffset,
-			FastBloomFilter._MAGIC.length,
-		);
-		for (let i = 0; i < FastBloomFilter._MAGIC.length; i += 1) {
-			if (magicView[i] !== FastBloomFilter._MAGIC[i]) {
+		const magicView = new Uint8Array(buffer, byteOffset, MAGIC.length);
+		for (let i = 0; i < MAGIC.length; i += 1) {
+			if (magicView[i] !== MAGIC[i]) {
 				throw new Error("Invalid magic number");
 			}
 		}
 
-		const headerView = new DataView(
-			buffer,
-			byteOffset + FastBloomFilter._MAGIC.length,
-			8,
-		);
+		const headerView = new DataView(buffer, byteOffset + MAGIC.length, 8);
 		const bitCount = headerView.getUint32(0, true);
 		const hashCount = headerView.getUint32(4, true);
 		FastBloomFilter.assertValidParameters(bitCount, hashCount);
