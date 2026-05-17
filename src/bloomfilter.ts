@@ -1,4 +1,4 @@
-import * as fs from "node:fs";
+import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
 const MAGIC = new Uint8Array([0x46, 0x42, 0x46, 0x32]); // "FBF2"
@@ -173,7 +173,7 @@ export default class FastBloomFilter {
 	private static async compileWasmModule(): Promise<WebAssembly.Module> {
 		const wasmUrl = new URL("./wasm/bloomfilter.wasm", import.meta.url);
 		const wasmPath = fileURLToPath(wasmUrl);
-		const wasmBuffer = fs.readFileSync(wasmPath);
+		const wasmBuffer = await readFile(wasmPath);
 		return WebAssembly.compile(wasmBuffer);
 	}
 
